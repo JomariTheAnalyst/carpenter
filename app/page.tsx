@@ -22,6 +22,7 @@ import {
 } from '@/lib/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import CodeApplicationProgress, { type CodeApplicationState } from '@/components/CodeApplicationProgress';
+import HomeScreen from '@/components/HomeScreen';
 
 interface SandboxData {
   sandboxId: string;
