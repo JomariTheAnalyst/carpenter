@@ -1468,6 +1468,130 @@ Tip: I automatically detect and install npm packages from your code imports (lik
     return null;
   };
 
+  // Generate AI code for fresh applications
+  const generateAICode = async (prompt: string, isEdit: boolean = false) => {
+    console.log('[generateAICode] Starting generation with prompt:', prompt);
+    
+    setGenerationProgress(prev => ({
+      ...prev,
+      isGenerating: true,
+      status: 'Planning your application...',
+      streamedCode: '',
+      isStreaming: true,
+      files: [],
+      lastProcessedPosition: 0,
+      isEdit
+    }));
+    
+    try {
+      // Build context for the request
+      const fullContext = {
+        sandboxId: sandboxData?.sandboxId,
+        currentFiles: sandboxFiles,
+        structure: fileStructure,
+        conversationContext: conversationContext
+      };
+      
+      console.log('[generateAICode] Sending request with context:', {
+        sandboxId: fullContext.sandboxId,
+        prompt: prompt,
+        isEdit: isEdit
+      });
+      
+      const response = await fetch('/api/generate-ai-code-stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: prompt,
+          model: aiModel,
+          context: fullContext,
+          isEdit: isEdit
+        })
+      });
+      
+      if (!response.ok || !response.body) {
+        throw new Error(`Failed to generate code: ${response.statusText}`);
+      }
+      
+      // Handle streaming response
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let generatedCode = '';
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              
+              switch (data.type) {
+                case 'text':
+                  generatedCode += data.text;
+                  setGenerationProgress(prev => ({
+                    ...prev,
+                    streamedCode: generatedCode,
+                    status: 'Generating code...'
+                  }));
+                  break;
+                  
+                case 'status':
+                  setGenerationProgress(prev => ({
+                    ...prev,
+                    status: data.message
+                  }));
+                  break;
+                  
+                case 'complete':
+                  console.log('[generateAICode] Generation complete');
+                  setGenerationProgress(prev => ({
+                    ...prev,
+                    isGenerating: false,
+                    isStreaming: false,
+                    status: 'Code generated successfully!'
+                  }));
+                  
+                  // Apply the generated code
+                  if (generatedCode.trim()) {
+                    addChatMessage('AI generation complete!', 'system');
+                    await applyGeneratedCode(generatedCode, isEdit);
+                    
+                    // Store in conversation context
+                    setConversationContext(prev => ({
+                      ...prev,
+                      lastGeneratedCode: generatedCode
+                    }));
+                  }
+                  return;
+                  
+                case 'error':
+                  throw new Error(data.message || 'Generation failed');
+              }
+            } catch (parseError) {
+              console.error('[generateAICode] Failed to parse SSE data:', parseError);
+            }
+          }
+        }
+      }
+      
+    } catch (error) {
+      console.error('[generateAICode] Error:', error);
+      setGenerationProgress(prev => ({
+        ...prev,
+        isGenerating: false,
+        isStreaming: false,
+        status: 'Generation failed'
+      }));
+      
+      throw error;
+    }
+  };
+
   // Handle AI-only generation from HomeScreen
   const handleAiPromptSubmit = async (prompt: string) => {
     console.log('[handleAiPromptSubmit] Starting AI-only generation with prompt:', prompt);
