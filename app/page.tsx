@@ -1468,6 +1468,54 @@ Tip: I automatically detect and install npm packages from your code imports (lik
     return null;
   };
 
+  // Handle AI-only generation from HomeScreen
+  const handleAiPromptSubmit = async (prompt: string) => {
+    console.log('[handleAiPromptSubmit] Starting AI-only generation with prompt:', prompt);
+    
+    // Clear previous messages and set up for fresh generation
+    setChatMessages([]);
+    setShowHomeScreen(false);
+    setActiveTab('generation');
+    setLoadingStage('planning');
+    
+    // Add the user's prompt as a message
+    addChatMessage(prompt, 'user');
+    addChatMessage('Creating your application with AI...', 'system');
+    
+    // Start sandbox creation if needed
+    let sandboxPromise: Promise<void> | null = null;
+    if (!sandboxData) {
+      sandboxPromise = createSandbox(true);
+    }
+    
+    try {
+      // Wait for sandbox if it's being created
+      if (sandboxPromise) {
+        await sandboxPromise;
+      }
+      
+      // Now generate code with the AI prompt
+      await generateAICode(prompt, false); // false = not an edit, this is fresh generation
+      
+    } catch (error) {
+      console.error('[handleAiPromptSubmit] Error:', error);
+      addChatMessage(`Failed to generate application: ${error instanceof Error ? error.message : 'Unknown error'}`, 'system');
+      setLoadingStage(null);
+    }
+  };
+
+  // Handle URL submission from HomeScreen (for future webcrawling)
+  const handleUrlSubmit = async (url: string, context?: string) => {
+    console.log('[handleUrlSubmit] URL submission (webcrawling not implemented yet):', url);
+    
+    // For now, show a message that this feature requires additional setup
+    setChatMessages([]);
+    setShowHomeScreen(false);
+    
+    addChatMessage(`URL cloning request: ${url}`, 'user');
+    addChatMessage('🚧 Website cloning requires web scraping API keys that are not yet configured. Please use the "Build with AI" option instead, where you can describe what you want to build!', 'system');
+  };
+
   const sendChatMessage = async () => {
     const message = aiChatInput.trim();
     if (!message) return;
